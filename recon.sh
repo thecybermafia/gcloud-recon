@@ -1,4 +1,49 @@
 #!/bin/bash
+
+# Function to check enabled APIs for a project
+enabled_apis() {
+  local project="$1"
+  local output_file="${project}.txt"
+
+  echo "Getting enabled APIs for $project" > "$output_file"
+  servicesCommand=$(gcloud services list --enabled --project "$project" 2>&1)
+  echo -e "$servicesCommand\n" >> "$output_file"
+  echo "Getting IAM Service Accounts for $project" >> "$output_file"
+  iamserviceaccountOutput=$(gcloud iam service-accounts list --project "$project" 2>&1)
+  echo "$iamserviceaccountOutput" >> "$output_file"
+}
+
+# Function to get information for a specific API
+get_api_info() {
+  local project="$1"
+  local api="$2"
+  local executeCommand="$3"
+  local output_file="${project}.txt"
+  echo -e "\n" >> "$output_file"
+  echo "Getting $api for $project" >> "$output_file"
+  commandOutput=$(eval "$executeCommand" 2>&1)
+  commandError=".*ERROR.*"
+  if [ $? -eq 0 ]; then
+    if [[ ! $commandOutput =~ $commandError ]]; then
+        echo "$commandOutput" >> "$output_file"
+    fi
+  else
+    echo "Error getting $api for $project" >> "$output_file"
+  fi
+}
+
+get_recursive_info() {
+  local executeCommand="$1"
+  local project="$2"
+  local output_file="${project}.txt"
+  commandOutput=$(eval "$executeCommand" 2>&1)
+  if [ $? -eq 0 ]; then
+    echo "$commandOutput" >> "$output_file"
+  else
+    echo "Error getting $api for $project" >> "$output_file"
+  fi
+}
+
 if [ $# -eq 0 ]; then
   echo "Please provide the filename as an argument."
   exit 1
@@ -11,9 +56,7 @@ if [[ -f "$file_path" ]]; then
 else
   echo "File not found: $file_path"
   echo "Retrieving project list using gcloud..."
-
   gcloud projects list --format="value(project_id)" > "$file_path"
-
   if [[ -f "$file_path" ]]; then
     echo "Project list saved to $file_path"
   else
@@ -22,99 +65,109 @@ else
   fi
 fi
 
+
 if [[ -f "$file_path" ]]; then
+  # Read the file line by line
   while IFS= read -r line <&3; do
-    echo "Getting enabled APIs for $line"
-    servicesCommand=$(gcloud services list --enabled --project "$line")
-    echo "$servicesCommand"
-    computeAPI="compute.googleapis.com"
-    if [[ $servicesCommand =~ $computeAPI ]]; then
-      echo "Getting Compute for $line"
-      computeOutput=$(gcloud compute networks list --project "$line")
-      computeregexError="^Listed\s\d+.*"
-      if [[ ! $computeOutput =~ $computeregexError ]]; then
-        echo "$computeOutput"
-      fi
-    fi
-    bigqueryAPI="bigquery.googleapis.com"
-    if [[ $servicesCommand =~ $bigqueryAPI ]]; then
-      echo "Getting BigQuery for $line"
-      bqOutput=$(bq ls --project_id "$line")
-      bqregexError="^BigQuery\serror.*"
-      if [[ ! $bqOutput =~ $bqregexError ]]; then
-        echo "$bqOutput"
-      fi
-    fi
-    containerAPI="containerregistry.googleapis.com"
-    if [[ $servicesCommand =~ $containerAPI ]]; then
-      echo "Getting Container for $line"
-      containerOutput=$(gcloud container images list --project "$line")
-      containerregexError="^ERROR.*"
-      if [[ ! $containerOutput =~ $containerregexError ]]; then
-        echo "$containerOutput"
-      fi
-    fi
-    kubeAPI="container.googleapis.com"
-    if [[ $servicesCommand =~ $kubeAPI ]]; then
-      echo "Getting Clusters for $line"
-      gcloud container clusters list --project "$line"
-    fi
-    storageAPI="storage-component.googleapis.com"
-    if [[ $servicesCommand =~ $storageAPI ]]; then
-      echo "Getting Storage for $line"
-      storageOutput=$(gsutil ls -p "$line")
-      storageregexError="^ERROR.*"
-      if [[ ! $storageOutput =~ $storageregexError ]]; then
-        echo "$storageOutput"
-      fi
-    fi
-    functionsAPI="cloudfunctions.googleapis.com"
-    if [[ $servicesCommand =~ $functionsAPI ]]; then
-      echo "Getting Cloud Functions for $line"
-      functionsOutput=$(gcloud functions list --project "$line")
-      functionsregexError="^ERROR.*"
-      if [[ ! $functionsOutput =~ $functionsregexError ]]; then
-        echo "$functionsOutput"
-      fi
-    fi
-    sqlAPI="sql-component.googleapis.com"
-    if [[ $servicesCommand =~ $sqlAPI ]]; then
-      echo "Getting SQL for $line"
-      sqlOutput=$(gcloud sql instances list --project "$line")
-      sqlregexError="^ERROR.*"
-      if [[ ! $sqlOutput =~ $sqlregexError ]]; then
-        echo "$sqlOutput"
-      fi
-    fi
-    firestoreAPI="firestore.googleapis.com"
-    if [[ $servicesCommand =~ $firestoreAPI ]]; then
-      echo "Getting Firestore for $line"
-      firestoreOutput=$(gcloud firestore indexes composite list --project "$line")
-      firestoreregexError="^ERROR.*"
-      if [[ ! $firestoreOutput =~ $firestoreregexError ]]; then
-        echo "$firestoreOutput"
-      fi
-    fi
-    kmsAPI="cloudkms.googleapis.com"
-    if [[ $servicesCommand =~ $kmsAPI ]]; then
-      echo "Getting Cloud KMS for $line"
-      kmsOutput=$(gcloud kms keyrings list --location global --project "$line")
-      kmsregexError="^ERROR.*"
-      if [[ ! $kmsOutput =~ $kmsregexError ]]; then
-        echo "$kmsOutput"
-      fi
-    fi
-    secretsAPI="secretmanager.googleapis.com"
-    if [[ $servicesCommand =~ $secretsAPI ]]; then
-      echo "Getting SQL for $line"
-      secretsOutput=$(gcloud secrets list --project "$line")
-      secretsregexError="^ERROR.*"
-      if [[ ! $secretsOutput =~ $secretsregexError ]]; then
-        echo "$secretsOutput"
-      fi
+    # Process each line
+    echo "Processing project: $line"
+    enabled_apis "$line"
+
+    # Get specific API information if enabled
+    if [[ $servicesCommand =~ "compute.googleapis.com" ]]; then
+      get_api_info "$line" "Compute Engine" "gcloud compute networks list --project $line"
     fi
 
-  done 3< "$file_path"   # Use file descriptor 3 for input redirection
+    if [[ $servicesCommand =~ "bigquery.googleapis.com" ]]; then
+      get_api_info "$line" "BigQuery" "bq ls --project_id $line"
+    fi
+
+    if [[ $servicesCommand =~ "containerregistry.googleapis.com" ]]; then
+      get_api_info "$line" "k8s Images" "gcloud container images list --project $line"
+    fi
+
+    if [[ $servicesCommand =~ "container.googleapis.com" ]]; then
+      get_api_info "$line" "k8s Clusters" "gcloud container clusters list --project $line"
+    fi
+
+    if [[ $servicesCommand =~ "storage-component.googleapis.com" ]]; then
+      get_api_info "$line" "Storage" "gsutil ls -p $line"
+      get_api_info "$line" "Storage Information" "gsutil ls -L -p $line"
+      for i in $(gsutil ls); do
+        get_recursive_info "gsutil ls $i" "$line"
+      done
+    fi
+
+    if [[ $servicesCommand =~ "cloudfunctions.googleapis.com" ]]; then
+      get_api_info "$line" "Cloud Functions" "gcloud functions list --project $line"
+    fi
+
+    if [[ $servicesCommand =~ "sql-component.googleapis.com" ]]; then
+      get_api_info "$line" "SQL" "gcloud sql instances list --project $line"
+      for i in $(gcloud sql instances list --quiet | awk '{print $1}' | tail -n +2); do
+        get_recursive_info "gcloud sql databases list --instance $i --project $line" "$line"
+      done
+    fi
+
+    if [[ $servicesCommand =~ "firestore.googleapis.com" ]]; then
+      get_api_info "$line" "Firestore" "gcloud firestore indexes composite list --project $line"
+    fi
+
+    if [[ $servicesCommand =~ "cloudkms.googleapis.com" ]]; then
+      get_api_info "$line" "Cloud KMS" "gcloud kms keyrings list --location global --project $line"
+      for i in $(gcloud kms keyrings list --location global --quiet); do
+        get_recursive_info "gcloud kms keys list --keyring $i --location global --project $line" "$line"
+      done
+    fi
+
+    if [[ $servicesCommand =~ "appengine.googleapis.com" ]]; then
+      get_api_info "$line" "AppEngine" "gcloud app instances list --project $line"
+    fi
+
+    if [[ $servicesCommand =~ "secretmanager.googleapis.com" ]]; then
+      get_api_info "$line" "Secrets" "gcloud secrets list --project $line"
+    fi
+
+    if [[ $servicesCommand =~ "pubsub.googleapis.com" ]]; then
+      get_api_info "$line" "PubSub Topics" "gcloud pubsub topics list --project $line"
+      get_api_info "$line" "PubSub Subscriptions" "gcloud pubsub subscriptions list --project $line"
+      get_api_info "$line" "PubSub Schmeas" "gcloud pubsub schemas list --project $line"
+      get_api_info "$line" "PubSub Snapshots" "gcloud pubsub snapshots list --project $line"
+    fi
+
+    if [[ $servicesCommand =~ "bigtable.googleapis.com" ]]; then
+      get_api_info "$line" "BigTable" "gcloud bigtable instances list --project $line"
+    fi
+
+    if [[ $servicesCommand =~ "datastore.googleapis.com" ]]; then
+      get_api_info "$line" "Datastore" "gcloud datastore indexes list --project $line"
+    fi
+
+    if [[ $servicesCommand =~ "spanner.googleapis.com" ]]; then
+      get_api_info "$line" "Spanner" "gcloud spanner databases list --project $line"
+      for i in $(gcloud spanner instances list --quiet | awk '{print $1}' | tail -n +2); do
+        get_recursive_info "gcloud spanner databases list --instance $i --project $line" "$line"
+      done
+    fi
+
+    if [[ $servicesCommand =~ "run.googleapis.com" ]]; then
+      get_api_info "$line" "Cloud Run" "gcloud run services list --project $line"
+    fi
+
+    if [[ $servicesCommand =~ "dns.googleapis.com" ]]; then
+      get_api_info "$line" "DNS Info" "gcloud dns project-info describe $line"
+      get_api_info "$line" "DNS Managed Zones" "gcloud dns managed-zones list $line"
+    fi
+
+    if [[ $servicesCommand =~ "logging.googleapis.com" ]]; then
+      get_api_info "$line" "Cloud Logging" "gcloud logging logs list --project $line"
+      for i in $(gcloud logging logs list --quiet --format="table[no-heading](.)"); do
+        echo Looking for logs in $i:
+        get_recursive_info "gcloud logging read $i --project $line" "$line"
+      done
+    fi
+
+  done 3< "$file_path"
 else
   echo "File not found: $file_path"
 fi
