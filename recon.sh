@@ -72,6 +72,7 @@ if [[ -f "$file_path" ]]; then
     # Process each line
     echo "Processing project: $line"
     enabled_apis "$line"
+    output_file="${line}.txt"
 
     # Get specific API information if enabled
     if [[ $servicesCommand =~ "compute.googleapis.com" ]]; then
@@ -93,7 +94,8 @@ if [[ -f "$file_path" ]]; then
     if [[ $servicesCommand =~ "storage-component.googleapis.com" ]]; then
       get_api_info "$line" "Storage" "gsutil ls -p $line"
       get_api_info "$line" "Storage Information" "gsutil ls -L -p $line"
-      for i in $(gsutil ls); do
+      echo -e "\n\nGetting recursive storage information for: $line" >> "$output_file"
+      for i in $(gsutil ls -p $line); do
         get_recursive_info "gsutil ls $i" "$line"
       done
     fi
@@ -104,7 +106,7 @@ if [[ -f "$file_path" ]]; then
 
     if [[ $servicesCommand =~ "sql-component.googleapis.com" ]]; then
       get_api_info "$line" "SQL" "gcloud sql instances list --project $line"
-      for i in $(gcloud sql instances list --quiet | awk '{print $1}' | tail -n +2); do
+      for i in $(gcloud sql instances list --quiet --project $line | awk '{print $1}' | tail -n +2); do
         get_recursive_info "gcloud sql databases list --instance $i --project $line" "$line"
       done
     fi
@@ -115,7 +117,7 @@ if [[ -f "$file_path" ]]; then
 
     if [[ $servicesCommand =~ "cloudkms.googleapis.com" ]]; then
       get_api_info "$line" "Cloud KMS" "gcloud kms keyrings list --location global --project $line"
-      for i in $(gcloud kms keyrings list --location global --quiet); do
+      for i in $(gcloud kms keyrings list --location global --quiet --project $line); do
         get_recursive_info "gcloud kms keys list --keyring $i --location global --project $line" "$line"
       done
     fi
@@ -145,7 +147,7 @@ if [[ -f "$file_path" ]]; then
 
     if [[ $servicesCommand =~ "spanner.googleapis.com" ]]; then
       get_api_info "$line" "Spanner" "gcloud spanner databases list --project $line"
-      for i in $(gcloud spanner instances list --quiet | awk '{print $1}' | tail -n +2); do
+      for i in $(gcloud spanner instances list --quiet --project $line | awk '{print $1}' | tail -n +2); do
         get_recursive_info "gcloud spanner databases list --instance $i --project $line" "$line"
       done
     fi
@@ -161,8 +163,8 @@ if [[ -f "$file_path" ]]; then
 
     if [[ $servicesCommand =~ "logging.googleapis.com" ]]; then
       get_api_info "$line" "Cloud Logging" "gcloud logging logs list --project $line"
-      for i in $(gcloud logging logs list --quiet --format="table[no-heading](.)"); do
-        echo Looking for logs in $i:
+      for i in $(gcloud logging logs list --quiet --format="table[no-heading](.)" --project $line); do
+        echo "Looking for logs in $i:" >> "$output_file"
         get_recursive_info "gcloud logging read $i --project $line" "$line"
       done
     fi
