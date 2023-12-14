@@ -9,7 +9,7 @@ enabled_apis() {
   servicesCommand=$(gcloud services list --enabled --project "$project" 2>&1)
   echo -e "$servicesCommand\n" >> "$output_file"
   echo "Getting IAM Service Accounts for $project" >> "$output_file"
-  iamserviceaccountOutput=$(gcloud iam service-accounts list --project "$project" 2>&1)
+  iamserviceaccountOutput=$(gcloud iam service-accounts list --project "$project" </dev/null 2>&1)
   echo "$iamserviceaccountOutput" >> "$output_file"
 }
 
