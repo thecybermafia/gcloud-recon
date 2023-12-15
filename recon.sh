@@ -21,7 +21,7 @@ get_api_info() {
   local output_file="${project}.txt"
   echo -e "\n" >> "$output_file"
   echo "Getting $api for $project" >> "$output_file"
-  commandOutput=$(eval "$executeCommand" 2>&1)
+  commandOutput=$(eval "$executeCommand" </dev/null 2>&1)
   commandError=".*ERROR.*"
   if [ $? -eq 0 ]; then
     if [[ ! $commandOutput =~ $commandError ]]; then
@@ -36,7 +36,7 @@ get_recursive_info() {
   local executeCommand="$1"
   local project="$2"
   local output_file="${project}.txt"
-  commandOutput=$(eval "$executeCommand" 2>&1)
+  commandOutput=$(eval "$executeCommand" </dev/null 2>&1)
   if [ $? -eq 0 ]; then
     echo "$commandOutput" >> "$output_file"
   else
